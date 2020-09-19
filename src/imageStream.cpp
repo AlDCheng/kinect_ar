@@ -35,13 +35,13 @@ ImageStream::ImageStream(json j)
 // Deconstructor: Close files or close Kinect
 ImageStream::~ImageStream()
 {
-    delete listener;
     if (type == "dataset") {
         assoc_list.close();
     } else if (type == "Kinect2") {
         dev->stop();
         dev->close();
         delete registration;
+        delete listener;
     }
 }
 
