@@ -4,13 +4,14 @@
 #include <algorithm>
 
 #include "imageStream.h"
+#include "kinectfusion.h"
 
 using namespace std;
 using json = nlohmann::json;
 
 void PrintHelp() {
 	cout << "Usage :" << endl;
-    cout << "    > lpe-tof-ar [parameters json filepath]" << endl;
+    cout << "    > kinect_ar [parameters json filepath]" << endl;
 }
 
 // From: https://stackoverflow.com/questions/865668/how-to-parse-command-line-arguments-in-c
@@ -45,6 +46,24 @@ int main(int argc, char* argv[])
         return 1;
     }
 
+    // Get a global configuration (comes with default values) and adjust some parameters
+    kinectfusion::GlobalConfiguration configuration;
+    configuration.voxel_scale = 2.f;
+    configuration.init_depth = 700.f;
+    configuration.distance_threshold = 10.f;
+    configuration.angle_threshold = 20.f;
+
+    // Create a KinectFusion pipeline with the camera intrinsics and the global configuration
+    kinectfusion::CameraParameters cam_params;
+    cam_params.focal_x = 582;
+    cam_params.focal_y = 582;
+    cam_params.image_height = 424;
+    cam_params.image_width = 512;
+    cam_params.principal_x = 255.5;
+    cam_params.principal_y = 211.5;
+
+    kinectfusion::Pipeline pipeline { cam_params, configuration };
+
     // Parse command line input
     InputParser input(argc, argv);
 
@@ -63,12 +82,27 @@ int main(int argc, char* argv[])
         } else {
             cv::imshow("RGB", streamer.rgb);
             cv::imshow("Depth", streamer.depth);
-        }
+
+            bool success = pipeline.process_frame(streamer.depth, streamer.rgb);
+            if (!success)
+                std::cout << "Frame could not be processed" << std::endl;
+                }
         
         if (cv::waitKey(1) == 27) break;
     }
 
     std::cout << "done!" << std::endl;
+
+    // Retrieve camera poses
+    auto poses = pipeline.get_poses();
+
+    // Export surface mesh
+    auto mesh = pipeline.extract_mesh();
+    kinectfusion::export_ply("data/mesh.ply", mesh);
+
+    // Export pointcloud
+    auto pointcloud = pipeline.extract_pointcloud();
+    kinectfusion::export_ply("data/pointcloud.ply", pointcloud);
     
     return 0;
 }
